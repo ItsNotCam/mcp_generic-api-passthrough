@@ -1,8 +1,9 @@
-import { getConfig } from "../config";
-import { ApiRequestSchema, ApiRequestInputSchema, type ApiRequest, type ToolDefinition } from "../types";
+import { ApiRequestInputSchema, ApiRequestSchema, getConfig } from "../configuration/config";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import type { ToolDefinition } from "../types";
+import { decryptAuthorization } from "../configuration/secrets";
 
-const { server_url, routes, auth_headers } = getConfig();
+const { apis } = getConfig();
 
 const ApiRequestToolName = "request";
 const ApiRequestToolConfig = {
@@ -10,28 +11,47 @@ const ApiRequestToolConfig = {
 	inputSchema: ApiRequestInputSchema,
 }
 
+const BLOCKED_HEADERS = [
+  "authorization", 
+  "cookie", 
+  "x-api-key", 
+  "x-auth-token"
+];
+
+function mergeHeaders(configHeaders: Headers, toolHeaders?: Headers, extraBlocked: string[] = []): Headers {
+  const merged = new Headers(toolHeaders); // Claude's first (bottom)
+  [...BLOCKED_HEADERS, ...extraBlocked].forEach(h => merged.delete(h)); // strip sensitive
+  configHeaders.forEach((val, key) => merged.set(key, val)); // yours win
+  return merged;
+}
+
 const ApiRequestToolFunction = async(
   rawArgs: unknown,
   _: RequestHandlerExtra<any, any>
 ): Promise<any> => {
-  const { method, endpoint, params, body } = ApiRequestSchema.parse(rawArgs);
+  const { mcp_route, method, endpoint, params, headers, body } = ApiRequestSchema.parse(rawArgs);
 
-  const matchesRule = ({ methods, route_matchers, endpoint_matchers }: typeof routes.allow[number]) =>
+  if (/(\.\.|\/\/|\\)/.test(endpoint)) throw new Error("Invalid endpoint");
+
+  const apiEntry = apis[mcp_route];
+  if (!apiEntry) throw new Error(`No API configured for route: ${mcp_route}`);
+
+  const { routes, api_server_url, authorization, blocked_headers } = apiEntry;
+
+  const matchesRule = ({ methods, api_endpoint_matchers }: typeof routes.allow[number]) =>
     methods.includes(method) &&
-    route_matchers.some((p: RegExp) => p.test(endpoint)) &&
-    endpoint_matchers.some((p: RegExp) => p.test(endpoint));
+    api_endpoint_matchers.some((p: RegExp) => p.test(endpoint));
 
   if (routes.deny.some(matchesRule)) throw new Error("Request is denied");
   if (!routes.allow.some(matchesRule)) throw new Error("That combination of method and url is not allowed");
 
-  const url = `${server_url}${endpoint}${params ? '?' + params.toString() : ''}`;
-  console.log(`Attempting to reach ${url}...`);
+  const url = `${api_server_url}${endpoint}${params ? '?' + params.toString() : ''}`;
+  const auth = await decryptAuthorization(authorization);
 
-  const requestBody = body !== undefined && !['GET', 'HEAD'].includes(method) ? { body } : {};
   const { response, data } = await fetch(url, {
     method,
-    headers: auth_headers,
-    ...requestBody
+    headers: mergeHeaders(auth.headers ?? new Headers(), headers, blocked_headers),
+    ...(body !== undefined && !['GET', 'HEAD'].includes(method) ? { body: JSON.stringify(body) } : {})
   }).then(async (response) => ({ response, data: await response.json() }));
 
   if (!response.ok) throw new Error(`Failed to reach ${url} with status: ${response.status}`);

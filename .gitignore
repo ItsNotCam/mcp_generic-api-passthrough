@@ -14,6 +14,9 @@ dist
 coverage
 *.lcov
 
+# secrets
+*.secret
+
 # logs
 logs
 _.log

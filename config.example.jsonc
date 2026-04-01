@@ -1,0 +1,46 @@
+{
+  // Display name for this MCP server
+  "name": "api-server",
+
+  // Description shown to the MCP client
+  "description": "Call local apis",
+
+  // Map of APIs, keyed by the mcp_route the tool caller uses to select this API.
+  // e.g. passing mcp_route: "/proxmox" targets the entry below.
+  "apis": {
+    "/proxmox": {
+
+      // Headers that tool callers are NOT allowed to set.
+      // These are stripped from any headers passed in by the tool caller
+      // before the config authorization headers are applied on top.
+      "blocked_headers": [],
+
+      // Base URL of the upstream API server. The endpoint from the tool call is appended to this.
+      "api_server_url": "",
+
+      // Authorization headers injected into every request to this API.
+      // Values are AES-256-GCM encrypted strings (base64). Use encrypt.sh to generate them.
+      "authorization": {
+        "headers": {
+          "Authorization": "..."
+        }
+      },
+
+      "routes": {
+        // Requests must match at least one allow rule to proceed.
+        "allow": [{
+            // HTTP methods permitted by this rule
+            "methods": [ "GET" ],
+
+            // Regexes tested against the request endpoint path.
+            // A request must match at least one to pass this rule.
+            "api_endpoint_matchers": [ "^/api2/json/.*" ]
+          }
+        ],
+
+        // Requests matching any deny rule are rejected, regardless of allow rules.
+        "deny": []
+      }
+    }
+  }
+}

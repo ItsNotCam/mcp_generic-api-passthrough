@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { randomUUID } from 'crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConfig } from './config';
+import { getConfig } from './configuration/config';
 
 
 export async function createServer(createMcpServer: () => McpServer, host = "0.0.0.0", port = 3000) {
