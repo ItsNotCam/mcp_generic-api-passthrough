@@ -7,20 +7,15 @@ import { getEnv } from './env';
 const { HOST, PORT } = getEnv();
 const config = getConfig();
 
-const server = new McpServer({
-	name: config.name,
-	version: "1.0.0"
-})
-
-server.registerTool(
-	ApiRequestTool.name,
-	ApiRequestTool.config,
-	ApiRequestTool.function as any
-);
+function createMcpServer() {
+	const server = new McpServer({ name: config.name, version: "1.0.0" });
+	server.registerTool(ApiRequestTool.name, ApiRequestTool.config, ApiRequestTool.function as any);
+	return server;
+}
 
 async function main() {
 	console.log(`Starting server on ${HOST}:${PORT}`)
-	await createServer(server, HOST, PORT);
+	await createServer(createMcpServer, HOST, PORT);
 }
 
 main().catch((error) => {

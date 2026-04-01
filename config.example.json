@@ -1,15 +1,18 @@
 {
-  name: "proxmox-api",
-  mcp_route: "/proxmox",
-  server_url: "https://gate.home.itsnotcam.dev",
-  auth_headers: {
+  "name": "proxmox-api",
+  "mcp_route": "/proxmox",
+  "server_url": "",
+  "auth_headers": {
     "Authorization": "%AUTH_HEADER_SECRET%"
   },
-  routes: [
-    { 
-      allowed_methods: [ "GET" ],
-      route_matchers: [".*"],
-      endpoint_matchers: ["^/api2/json/"]
-    }
-  ]
+  "routes": {
+    "allow": [
+      {
+        "methods": ["GET"],
+        "route_matchers": [".*"],
+        "endpoint_matchers": ["^/api2/json/"]
+      }
+    ],
+    "deny": []
+  }
 }

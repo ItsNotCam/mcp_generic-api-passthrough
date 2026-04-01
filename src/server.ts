@@ -5,7 +5,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getConfig } from './config';
 
 
-export async function createServer(mcpServer: McpServer, host = "0.0.0.0", port = 3000) {
+export async function createServer(createMcpServer: () => McpServer, host = "0.0.0.0", port = 3000) {
 	const { mcp_route } = getConfig();
 
 	const fastify = Fastify();
@@ -25,7 +25,7 @@ export async function createServer(mcpServer: McpServer, host = "0.0.0.0", port 
 			transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => sessionId });
 			transports.set(sessionId, transport);
 			transport.onclose = () => transports.delete(sessionId);
-			await mcpServer.connect(transport);
+			await createMcpServer().connect(transport);
 		}
 
 		await transport.handleRequest(request.raw, reply.raw, request.body);

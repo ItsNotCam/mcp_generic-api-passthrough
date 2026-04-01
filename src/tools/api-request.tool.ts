@@ -1,5 +1,5 @@
 import { getConfig } from "../config";
-import { ApiRequestSchema, type ApiRequest, type ToolDefinition } from "../types";
+import { ApiRequestSchema, ApiRequestInputSchema, type ApiRequest, type ToolDefinition } from "../types";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 
 const { server_url, routes, auth_headers } = getConfig();
@@ -7,35 +7,38 @@ const { server_url, routes, auth_headers } = getConfig();
 const ApiRequestToolName = "request";
 const ApiRequestToolConfig = {
 	description: "Make a request to an endpoint",
-	inputSchema: ApiRequestSchema,
+	inputSchema: ApiRequestInputSchema,
 }
 
 const ApiRequestToolFunction = async(
-  { method, endpoint, params, body }: ApiRequest,
+  rawArgs: unknown,
   _: RequestHandlerExtra<any, any>
 ): Promise<any> => {
-    for(const { allowed_methods, route_matchers, endpoint_matchers } of routes) {
-      if(!allowed_methods.includes(method)) continue;
-      if(!route_matchers.some((pattern: RegExp) => pattern.test(endpoint))) continue;
-      if(!endpoint_matchers.some((pattern: RegExp) => pattern.test(endpoint))) continue;
+  const { method, endpoint, params, body } = ApiRequestSchema.parse(rawArgs);
 
-      const url = `${server_url}/${endpoint}${params ? '?' + params.toString() : ''}`
-			const requestBody = (body !== undefined && !['GET', 'HEAD'].includes(method) ? { body } : {})
-      const response = await fetch(url, {
-        method,
-        headers: auth_headers,
-        ...requestBody
-      }).then((r) => r.json())
+  const matchesRule = ({ methods, route_matchers, endpoint_matchers }: typeof routes.allow[number]) =>
+    methods.includes(method) &&
+    route_matchers.some((p: RegExp) => p.test(endpoint)) &&
+    endpoint_matchers.some((p: RegExp) => p.test(endpoint));
 
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(response)
-        }]
-      }
-    }
+  if (routes.deny.some(matchesRule)) throw new Error("Request is denied");
+  if (!routes.allow.some(matchesRule)) throw new Error("That combination of method and url is not allowed");
 
-    throw new Error("That combination of method and url is not allowed");
+  const url = `${server_url}${endpoint}${params ? '?' + params.toString() : ''}`;
+  console.log(`Attempting to reach ${url}...`);
+
+  const requestBody = body !== undefined && !['GET', 'HEAD'].includes(method) ? { body } : {};
+  const { response, data } = await fetch(url, {
+    method,
+    headers: auth_headers,
+    ...requestBody
+  }).then(async (response) => ({ response, data: await response.json() }));
+
+  if (!response.ok) throw new Error(`Failed to reach ${url} with status: ${response.status}`);
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(data) }]
+  };
 }
 
 const toolDefinition: ToolDefinition = {

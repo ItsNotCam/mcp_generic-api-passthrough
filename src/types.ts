@@ -4,7 +4,7 @@ import z from "zod";
 export const HTTPMethod = ["GET", "POST", "PUT", "DELETE", "PATCH"] as const;
 
 const RouteSchema = z.object({
-	allowed_methods: z.array(
+	methods: z.array(
 		z.string()
 		.transform((method: string) => method.toUpperCase())
 		.pipe(z.enum(HTTPMethod))
@@ -23,7 +23,10 @@ export const RouteConfigSchema = z.object({
 	name: z.string().min(1),
 	server_url: z.string().min(1),
 	auth_headers: z.record(z.string(), z.string()),
-	routes: z.array(RouteSchema),
+	routes: z.object({
+		allow: z.array(RouteSchema),
+		deny: z.array(RouteSchema),
+	}),
 	mcp_route: z.string().min(1),
 }).transform(({auth_headers, ...rest}) => {
 	for(const [key, value] of Object.entries<string>(auth_headers)) {
@@ -33,20 +36,13 @@ export const RouteConfigSchema = z.object({
 })
 
 
-export const ApiRequestSchema = z.object({
-	method: z
-		.string()
-		.transform((method: string) => method.toUpperCase())
-		.pipe(z.enum(HTTPMethod)),
+export const ApiRequestInputSchema = z.object({
+	method: z.enum(HTTPMethod),
+	endpoint: z.string().min(1),
+	body: z.any().optional()
+})
 
-	endpoint: z
-		.string()
-		.min(1),
-		
-	body: z
-		.any()
-		.optional()
-}).transform(({ method, endpoint, body }) => {
+export const ApiRequestSchema = ApiRequestInputSchema.transform(({ method, endpoint, body }) => {
 	const [ url, params ] = endpoint.split("?");
 	return {
 		method,
