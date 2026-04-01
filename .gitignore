@@ -1,7 +1,7 @@
 # dependencies (bun install)
 node_modules
 
-config.json
+config.yaml
 CLAUDE.md
 .claude
 

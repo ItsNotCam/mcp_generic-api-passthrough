@@ -2,14 +2,15 @@ import * as fs from 'fs';
 import dotenv from 'dotenv';
 import z from 'zod';
 import { secretSchema } from './secrets';
+import { YAML } from 'bun';
 
 // config
 dotenv.config({ override: false })
 let _config: AppConfig | null = null;
 export const getConfig = () => {
 	if (_config) return _config;
-	const configFile: string = fs.readFileSync("./config.json", "utf-8");
-	_config = AppConfigSchema.parse(JSON.parse(configFile))
+	const configFile: string = fs.readFileSync("./config.yaml", "utf-8");
+	_config = AppConfigSchema.parse(YAML.parse(configFile))
 	return _config;
 }
 
@@ -62,7 +63,10 @@ export const ApiConfigEntrySchema = z.object({
 })
 
 export const AppConfigSchema = z.object({
+	name: z.string().min(1),
+	version: z.string().min(1),
 	mcp_route: z.string().min(1).regex(/^\/.*/).default("/mcp"),
+	description: z.string().min(1),
 	apis: z.record(z.string().min(1).regex(/^\/.*/), ApiConfigEntrySchema),
 });
 

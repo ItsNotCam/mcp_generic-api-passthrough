@@ -48,13 +48,27 @@ const ApiRequestToolFunction = async(
   const url = `${api_server_url}${endpoint}${params ? '?' + params.toString() : ''}`;
   const auth = await decryptAuthorization(authorization);
 
-  const { response, data } = await fetch(url, {
-    method,
-    headers: mergeHeaders(auth.headers ?? new Headers(), headers, blocked_headers),
-    ...(body !== undefined && !['GET', 'HEAD'].includes(method) ? { body: JSON.stringify(body) } : {})
-  }).then(async (response) => ({ response, data: await response.json() }));
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: mergeHeaders(auth.headers ?? new Headers(), headers, blocked_headers),
+      ...(body !== undefined && !['GET', 'HEAD'].includes(method) ? { body: JSON.stringify(body) } : {})
+    });
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(`Network error reaching ${url}: ${cause}`);
+  }
 
-  if (!response.ok) throw new Error(`Failed to reach ${url} with status: ${response.status}`);
+  const text = await response.text();
+  if (!response.ok) throw new Error(`${url} returned ${response.status}: ${text.slice(0, 200)}`);
+
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`${url} returned non-JSON response: ${text.slice(0, 200)}`);
+  }
 
   return {
     content: [{ type: "text", text: JSON.stringify(data) }]
