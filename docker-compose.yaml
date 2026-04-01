@@ -2,11 +2,14 @@ services:
   api-proxy:
     image: anit/mcp_api-proxy:latest
     build:
-      args:
-        PORT: ${PORT:-3000}
+      context: .
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+    env_file:
+      - .env
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - 0.0.0.0:3000:3000
     volumes:
-      - ./config.yaml:/usr/src/app/config.yaml:ro
-      - ./env:/usr/src/app/env:ro
+      - ./config.yaml:/app/config.yaml:ro
     restart: unless-stopped
