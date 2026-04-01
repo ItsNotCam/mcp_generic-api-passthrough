@@ -19,6 +19,8 @@ const BLOCKED_HEADERS = [
   "x-auth-token"
 ];
 
+// --- Request helpers ---
+
 function mergeAndCleanHeaders(
   configHeaders: Headers,
   toolHeaders: Headers,
@@ -68,7 +70,7 @@ const validateRoute = (
 const buildRequestOpts = async(
   apiEntry: ApiConfig,
   request: ApiRequest
-): Promise<RequestInit> => {
+): Promise<{ requestInit: RequestInit, sensitiveValues: string[] }> => {
   const {
     authorization,
     blocked_headers
@@ -87,12 +89,55 @@ const buildRequestOpts = async(
     blocked_headers
   );
 
+  // collect decrypted auth header values so they can be scrubbed from responses
+  const sensitiveValues: string[] = [];
+  auth.headers?.forEach((val) => sensitiveValues.push(val));
+
   const body: BodyInit | undefined = (requestbody !== undefined && !['GET', 'HEAD'].includes(method))
     ? JSON.stringify(requestbody)
     : undefined
 
-  return { method, headers, body };
+  return { requestInit: { method, headers, body }, sensitiveValues };
 }
+
+// --- Response helpers ---
+
+function filterFields(value: unknown, denyFields: ReadonlySet<string>): unknown {
+  if (Array.isArray(value)) {
+    return value.map(item => filterFields(item, denyFields));
+  }
+  if (value !== null && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (denyFields.has(key)) continue;
+      result[key] = filterFields(val, denyFields);
+    }
+    return result;
+  }
+  return value;
+}
+
+function applyFieldFilters(rawText: string, denyFields: string[]): string {
+  if (denyFields.length === 0) return rawText;
+  try {
+    const parsed = JSON.parse(rawText);
+    return JSON.stringify(filterFields(parsed, new Set(denyFields)));
+  } catch {
+    return rawText;
+  }
+}
+
+function buildScrubber(
+  backendUrl: string,
+  sensitiveValues: string[],
+  patterns: RegExp[]
+): (s: string) => string {
+  const scrubPatterns: (string | RegExp)[] = [backendUrl, ...sensitiveValues, ...patterns];
+  return (s: string) => scrubPatterns.reduce<string>((t, p) =>
+    typeof p === 'string' ? t.replaceAll(p, '[REDACTED]') : t.replace(p, '[REDACTED]'), s);
+}
+
+// --- Tool definition ---
 
 const toolDefinition: ToolDefinition = {
   name: "fetch",
@@ -113,21 +158,31 @@ const toolDefinition: ToolDefinition = {
 
     // Validate that the route and method is allowed
     const { isValid, errors } = validateRoute(apiEntry.routes, method, endpoint);
-    if(!isValid) throw new Error(`Request failed: ${errors.join(", ")}`)
+    if (!isValid) throw new Error(`Request failed: ${errors.join(", ")}`);
 
-    // build & send request
+    // Build request
     const url = `${apiEntry.api_server_url}${endpoint}${params ? '?' + params.toString() : ''}`;
-    const requestOpts: RequestInit = await buildRequestOpts(apiEntry, apiRequest);
+    const { requestInit, sensitiveValues } = await buildRequestOpts(apiEntry, apiRequest);
+    const scrub = buildScrubber(apiEntry.api_server_url, sensitiveValues, apiEntry.scrub_response);
 
-    let response  = await fetch(url, requestOpts);
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`${url} returned ${response.status}: ${text.slice(0, 200)}`);
+    // Send request — catch network-level errors to avoid leaking the backend URL
+    let response: Response;
+    try {
+      response = await fetch(url, requestInit);
+    } catch {
+      throw new Error(`${mcp_route}${endpoint} request failed`);
     }
 
-    const message = { type: "text", text }
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(`${mcp_route}${endpoint} returned ${response.status}: ${scrub(rawText).slice(0, 200)}`);
+    }
 
-    return { content: [message] };
+    // Apply field filters first (structural), then scrub remaining sensitive patterns (textual)
+    const filtered = applyFieldFilters(rawText, apiEntry.deny_fields);
+    const text = scrub(filtered);
+
+    return { content: [{ type: "text", text }] };
   }
 }
 

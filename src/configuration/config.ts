@@ -66,6 +66,8 @@ export const ApiConfigSchema = z.object({
 	api_server_url: z.string().min(1),
 	description: z.string().optional(),
 	blocked_headers: z.array(z.string().transform(h => h.toLowerCase())).default([]),
+	scrub_response: z.array(z.string().transform((p) => new RegExp(p, 'g'))).default([]),
+	deny_fields: z.array(z.string()).default([]),
 	authorization: AuthConfigSchema,
 	routes: RouteFirewallSchema
 })
