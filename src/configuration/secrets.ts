@@ -1,13 +1,13 @@
 import z from "zod";
 import { getEnv } from "./env";
 
-export const secretSchema = z.object({
+export const AuthConfigSchema = z.object({
     headers: z
         .record(z.string(), z.string())
         .transform((header) => new Headers(header))
         .optional()
 })
-export type Secret = z.infer<typeof secretSchema>;
+export type AuthConfig = z.infer<typeof AuthConfigSchema>;
 
 const decryptString = async(secret: string, key: string): Promise<string> => {
     const cryptoKey = await crypto.subtle.importKey(
@@ -31,10 +31,10 @@ const decryptString = async(secret: string, key: string): Promise<string> => {
     return new TextDecoder().decode(decrypted);
 }
 
-export const decryptAuthorization = async ({ headers }: Secret): Promise<Secret> => {
+export const decryptAuthorization = async ({ headers }: AuthConfig): Promise<AuthConfig> => {
     const env = getEnv();
 
-    let out: Secret = { }
+    let out: AuthConfig = { }
 
     if(headers) {
         out.headers = new Headers(Object.fromEntries(await Promise.all(

@@ -7,9 +7,6 @@ export const getEnv = () => {
 	return _env;
 }
 
-/*
-* Schema
-*/
 export const envSchema = z.object({
 	ENCRYPTION_KEY: z.string().length(64),
 	HOST: z.string().min(1),

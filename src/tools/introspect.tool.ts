@@ -6,7 +6,7 @@ import z from "zod";
 const { apis } = getConfig();
 
 const toolDefinition: ToolDefinition = {
-    name: "introspect",
+    name: "list_routes",
     config: {
         description: "Returns the available API routes and their allowed methods and endpoint patterns. Call this before making requests to understand what is available.",
         inputSchema: z.object({}),

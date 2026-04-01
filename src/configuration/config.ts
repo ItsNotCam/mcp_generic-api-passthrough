@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import dotenv from 'dotenv';
 import z from 'zod';
-import { secretSchema } from './secrets';
+import { AuthConfigSchema } from './secrets';
 import { YAML } from 'bun';
 
 // config
@@ -26,7 +26,13 @@ export const ApiRequestInputSchema = z.object({
 	body: z.any().optional()
 })
 
-export const ApiRequestSchema = ApiRequestInputSchema.transform(({ method, endpoint, body, mcp_route, headers }) => {
+export const ApiRequestSchema = ApiRequestInputSchema.transform(({
+	method,
+	endpoint,
+	body,
+	mcp_route,
+	headers
+}) => {
 	const [ url, params ] = endpoint.split("?");
 	return {
 		mcp_route,
@@ -39,7 +45,7 @@ export const ApiRequestSchema = ApiRequestInputSchema.transform(({ method, endpo
 })
 
 /* Config File */
-const RouteSchema = z.object({
+export const FirewallRuleSchema = z.object({
 	methods: z.array(z
 		.string()
 		.transform((method: string) => method.toUpperCase())
@@ -51,15 +57,17 @@ const RouteSchema = z.object({
 	),
 })
 
-export const ApiConfigEntrySchema = z.object({
+export const RouteFirewallSchema = z.object({
+	allow: z.array(FirewallRuleSchema),
+	deny: z.array(FirewallRuleSchema)
+})
+
+export const ApiConfigSchema = z.object({
 	api_server_url: z.string().min(1),
 	description: z.string().optional(),
 	blocked_headers: z.array(z.string().transform(h => h.toLowerCase())).default([]),
-	authorization: secretSchema,
-	routes: z.object({
-		allow: z.array(RouteSchema),
-		deny: z.array(RouteSchema),
-	}),
+	authorization: AuthConfigSchema,
+	routes: RouteFirewallSchema
 })
 
 export const AppConfigSchema = z.object({
@@ -67,11 +75,13 @@ export const AppConfigSchema = z.object({
 	version: z.string().min(1),
 	mcp_route: z.string().min(1).regex(/^\/.*/).default("/mcp"),
 	description: z.string().min(1),
-	apis: z.record(z.string().min(1).regex(/^\/.*/), ApiConfigEntrySchema),
+	apis: z.record(z.string().min(1).regex(/^\/.*/), ApiConfigSchema),
 });
 
 /* types */
-
-export type ApiEntry = z.infer<typeof ApiConfigEntrySchema>;
+export type ApiConfig = z.infer<typeof ApiConfigSchema>;
 export type ApiRequest = z.infer<typeof ApiRequestSchema>;
+export type FirewallRule = z.infer<typeof FirewallRuleSchema>;
+export type RouteFirewall = z.infer<typeof RouteFirewallSchema>;
+
 export type AppConfig = z.infer<typeof AppConfigSchema>;
