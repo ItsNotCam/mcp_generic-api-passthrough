@@ -1,2 +1,5 @@
 node_modules
 .claude
+config.yaml
+encrypt.sh
+*.local
