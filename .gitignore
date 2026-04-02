@@ -1,7 +1,7 @@
 # dependencies (bun install)
 node_modules
 
-config.json
+config.yaml
 CLAUDE.md
 .claude
 
@@ -13,6 +13,9 @@ dist
 # code coverage
 coverage
 *.lcov
+
+# secrets
+*.secret
 
 # logs
 logs
